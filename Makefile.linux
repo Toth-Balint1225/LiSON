@@ -1,0 +1,18 @@
+# Linux makefile
+# If you want to use it, rename to Makefile, with no other files named Makefile in the directory,
+# or specify this makefile in your compile command
+
+CFLAGS:=-Wall -Werror -std=c++17 -g
+
+all: test
+run: test
+	./test
+
+test:  main.o lison.o serializer.o parser.o tokenizer.o object.o
+	g++ $(CFLAGS) $^ -o $@
+
+%.o: %.cpp LiSON_base.h
+	g++ $(CFLAGS) -c $<
+
+clean: 
+	rm -rf *.o test copy.lison

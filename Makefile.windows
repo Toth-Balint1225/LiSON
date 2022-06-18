@@ -1,3 +1,7 @@
+# Windows makefile
+# If you want to use it, rename to Makefile, with no other files named Makefile in the directory,
+# or specify this makefile in your compile command
+
 CFLAGS:=-Wall -Werror -std=c++17 -g
 
 all: test.exe
@@ -14,4 +18,3 @@ clean:
 	del *.o
 	del *.exe
 	del copy.lison
-
