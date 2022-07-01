@@ -59,7 +59,8 @@ namespace lison
 	struct Object
 	{
 		Token token;
-		Object() = default;
+		Object(const Token& t); 
+		Object(const Object& other);
 		~Object() = default;
 		std::string to_string() const;
 	};

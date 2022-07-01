@@ -18,34 +18,73 @@
 
 namespace lison
 {
+//     std::string Object::to_string() const
+//     {
+//         std::stringstream ss;
+//         switch (token)
+//         {
+//             case Object::Tkn_Literal:
+//             {
+//                 ss << "'";
+//                 ss << str;
+//                 ss << "'";
+//                 break;
+//             }
+//             case Object::Tkn_Object:
+//             {
+//                 ss << "( ";
+//                 for (auto o : obj)
+//                 {
+//                     ss << o.to_string();
+//                 }
+//                 ss << ")";
+//                 break;
+//             }
+//             default:
+//             {
+//                 ss <<"()";
+//             }
+//         }
+//         ss << " ";
+//         return ss.str();
+//     }
+
+	Object::Object(const Token& t)
+		: token(t)
+	{}
+
+	Object::Object(const Object& other)
+		: token(other.token)
+	{}
+	
     std::string Object::to_string() const
-    {
-        std::stringstream ss;
-        switch (token)
-        {
-            case Object::Tkn_Literal:
-            {
+	{
+		// the new variant visitor magic
+		std::stringstream ss;
+		auto visitor = overload
+		{
+			[&ss](const Tkn_Literal& literal)
+			{
                 ss << "'";
-                ss << str;
+                ss << literal.value;
                 ss << "'";
-                break;
-            }
-            case Object::Tkn_Object:
-            {
+			},
+			[&ss](const Tkn_Object& object)
+			{
                 ss << "( ";
-                for (auto o : obj)
+                for (auto o : object.value)
                 {
                     ss << o.to_string();
                 }
                 ss << ")";
-                break;
-            }
-            default:
-            {
-                ss <<"()";
-            }
-        }
-        ss << " ";
-        return ss.str();
-    }
+			},
+			[&ss](const Tkn_Error& error)
+			{
+				ss << "ERROR";
+			}
+		};
+		std::visit(visitor, token);
+		ss << " ";
+		return ss.str();
+	}
 }
