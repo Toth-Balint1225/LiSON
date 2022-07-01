@@ -18,6 +18,8 @@
 
 namespace lison
 {
+	// consume symbol, but don't use it
+	// can be used to check if a special symbol is present
     bool Parser::accept(Tokenizer::Symbol req)
     {
         if (iter->sym == req)
@@ -63,52 +65,66 @@ namespace lison
             }
             if (accept(Tokenizer::Sym_Quote))
             {
-                Object o;
-                o.token = Object::Tkn_Literal;
-                o.str = ss.str();
+                // Object o;
+                // o.token = Object::Tkn_Literal;
+                // o.str = ss.str();
+				Object o(Token{Tkn_Literal{ss.str()}});
                 return o;
             }
         }
-        Object o;
-        o.token = Object::Tkn_Error;
+        Object o(Token{Tkn_Error{}});
+        // o.token = Object::Tkn_Error;
         return o;
     }
 
     Object Parser::object()
     {
-        Object o;
+		Object o(Token{Tkn_Object{}});
+		// yank the whitespaces
         while (accept(Tokenizer::Sym_Whitespace));
+
+		// outer if: looks for left paren, that means a new Object object
         if (accept(Tokenizer::Sym_LeftParen))
         {
-            o.token = Object::Tkn_Object;
             // yank the whitespaces
             while (accept(Tokenizer::Sym_Whitespace));
+
+			// if it's an empty object, we return
             if (accept(Tokenizer::Sym_RightParen))
-            {
                 return o;
-            }
+			// the object has some contents
             else 
             {
+				// get the first object in the object
+				// at this point there must be at least one
                 Object first_obj = object();
-                if (first_obj.token == Object::Tkn_Error)
-                {
-                    o.token = Object::Tkn_Error;
-                    return o;
-                }
-                o.obj.push_back(first_obj);
+
+				// put them object in with a visitor
+				
+				auto firstAppender = overload
+				{
+					[](const Tkn_Literal& l) {},
+					[&first_obj](Tkn_Object& obj)
+					{
+						obj.value.push_back(first_obj);
+					},
+					[](const Tkn_Error& error) {}
+				};
+				std::visit(firstAppender,o.token);
+                // o.token.value.push_back(first_obj);
                 // optional objects
                 bool list = true;
                 while (list)
                 {
+					// actually need a whitespace
                     if (!accept(Tokenizer::Sym_Whitespace))
                     {
+						// if end of list
                         if (accept(Tokenizer::Sym_RightParen))
                         {
                             list = false;
                             break;
                         }
-                        o.token = Object::Tkn_Error;
-                        return o;
                     }
                     if (accept(Tokenizer::Sym_RightParen))
                     {
@@ -116,29 +132,52 @@ namespace lison
                         break;
                     }
                     Object list_obj = object();
-                    if (list_obj.token == Object::Tkn_Error)
-                    {
-                        o.token = Object::Tkn_Error;
-                        return o;
-                    }
-                    o.obj.push_back(list_obj);
+					// errors just go to the top level
+                    // if (list_obj.token == Object::Tkn_Error)
+                    // {
+                    //     o.token = Object::Tkn_Error;
+                    //     return o;
+                    // }
+                    // o.token.value.push_back(list_obj);
+					auto listAppender = overload
+					{
+						[](const Tkn_Literal& l) {},
+						[&list_obj](Tkn_Object& obj)
+						{
+							obj.value.push_back(list_obj);
+						},
+						[](const Tkn_Error& error) {}
+					};
+					std::visit(listAppender,o.token);
                 }
-                return o;
             }
         }
+		// outer else:
+		// happens if the object doesn't start with a left paren -> it's a literal (or later something else)
         else
         {
-            Object l = literal();   
-            if (l.token != Object::Tkn_Error)
-            {
-                o.token = Object::Tkn_Literal;
-                o.str = l.str;
-                return o;
-            }
-            return l;
+			// we try with the literal
+            Object tmp = literal();
+			bool finish = false;
+			auto afterLiteral = overload
+			{
+				[&o,&finish](const Tkn_Literal& literal)
+				{
+					o = Object(Token{literal});
+					finish = true;
+				},
+				[](const Tkn_Object& object)
+				{},
+				[&o](const Tkn_Error& err)
+				{
+					o = Object(Token{Tkn_Error{}});
+				}
+			};
+			std::visit(afterLiteral, tmp.token);
+			if (finish)
+				return o;
         }
-        o.token = Object::Tkn_Error;
-        return o;
+		return o;
     }
 
     Object Parser::parse(std::list<Tokenizer::SymbolObject> symbolStream)
@@ -146,4 +185,5 @@ namespace lison
         iter = symbolStream.begin();
         return object();
     }
+
 }
