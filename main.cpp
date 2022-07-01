@@ -23,22 +23,32 @@ protected:
      */
     virtual void interpret(const Object& obj) override
     {
-        // check if the object is valid
-        if (obj.token != Object::Tkn_Object)
-        {
-            data = "ERROR";
-            return;
-        }
-        // the first element of the object's list is that we're interested in
-        Object o_data = obj.obj.front();
-        if (o_data.token != Object::Tkn_Literal)
-        {
-            data = "ERROR";
-            return;
-        }
-
-        // setting the object's data
-        data = o_data.str;
+		auto interpreter = overload
+		{
+			[this] (const Tkn_Object& object)
+			{
+				auto innerInterpreter = overload
+				{
+					[] (const Tkn_Object& o) {},
+					[this] (const Tkn_Literal& l)
+					{
+						data = l.value;
+					},
+					[this] (const Tkn_Error& e)
+					{
+						data = "ERROR";
+					}
+				};
+				if (!object.value.empty())
+					std::visit(innerInterpreter,object.value.front().token);
+			},
+			[] (const Tkn_Literal& l) {},
+			[this] (const Tkn_Error& e)
+			{
+				data = "ERROR";
+			}
+		};
+		std::visit(interpreter,obj.token);
     }
 
     /**
@@ -48,15 +58,20 @@ protected:
     virtual Object revert() const 
     {
         // object for the ()
-        Object o_root;
+        Object o_root(Token{Tkn_Object{}});
         // object for the literal
-        Object o_data;
-        // set the token type
-        o_root.token = Object::Tkn_Object;
-        o_data.token = Object::Tkn_Literal;
+        Object o_data(Token{Tkn_Literal{data}});
         // set the data of the appropriate object
-        o_data.str = data;
-        o_root.obj.push_back(o_data);
+		auto adder = overload
+		{
+			[&o_data](Tkn_Object& obj)
+			{
+				obj.value.push_back(o_data);
+			},
+			[](Tkn_Literal& l) {},
+			[](Tkn_Error& e) {}
+		};
+		std::visit(adder,o_root.token);
         return o_root;
     }
 public:
