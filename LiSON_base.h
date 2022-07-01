@@ -21,6 +21,7 @@
 #include <sstream>
 #include <list>
 #include <fstream>
+#include <variant>
 
 /**
  * LiSON - LiSp Object Notation
@@ -30,27 +31,38 @@
  */
 namespace lison
 {
-    struct Object
-    {
-        enum Token
-        {
-            Tkn_Literal,
-            Tkn_Integer,
-            Tkn_Float,
-            Tkn_Object,
-            Tkn_Error,
-        };
-        Token token;
-        // second best thing to a union
-        std::string str;
-        int i;
-        float f;
-        std::list<Object> obj;
+	struct Tkn_Literal
+	{
+		std::string value;
+	};
 
-        Object() = default;
-        ~Object() = default;
-        std::string to_string() const;
-    };
+	struct Object;
+	struct Tkn_Object
+	{
+		std::list<Object> value;
+	};
+
+	struct Tkn_Error
+	{};
+
+	using Token = std::variant<Tkn_Literal,Tkn_Object,Tkn_Error>;
+
+	template <class... Ts>
+	struct overload : Ts...
+	{
+		using Ts::operator ()...;
+	};
+
+	template <class... Ts>
+	overload(Ts...) -> overload<Ts...>;
+
+	struct Object
+	{
+		Token token;
+		Object() = default;
+		~Object() = default;
+		std::string to_string() const;
+	};
 
     /**
      * string -> set of symbols
