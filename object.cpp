@@ -87,4 +87,58 @@ namespace lison
 		ss << " ";
 		return ss.str();
 	}
+
+	Object Object::fromString(const std::string& str)
+	{
+		return Object(Token{Tkn_Literal{str}});
+	}
+
+	Object Object::fromLiSON(const LiSON& lison)
+	{
+		return lison.revert();
+	}
+
+	template <class T>
+	Object Object::fromObject(T t,
+							  std::function<Object(const T&)> f)
+	{
+		return f(t);
+	}
+
+	void Object::foreachObjectData(
+		std::function<void(const Object&)> f) const
+	{
+		if (!std::holds_alternative<Tkn_Object>(token))
+			return;
+		auto& t = std::get<Tkn_Object>(token);
+		for (auto it : t.value)
+		{
+			f(it);
+		}
+	}
+
+	void Object::add(const Object& obj)
+	{
+		if (!std::holds_alternative<Tkn_Object>(token))
+			return;
+		auto& t = std::get<Tkn_Object>(token);
+		t.value.push_back(obj);
+	}
+
+	std::optional<std::string> Object::expectLiteralData() const
+	{
+		if (!std::holds_alternative<Tkn_Literal>(token))
+			return {};
+		auto& t = std::get<Tkn_Literal>(token);
+		return {t.value};
+	}
+
+	std::optional<std::list<Object>> Object::expectObjectData() const
+	{
+		if (!std::holds_alternative<Tkn_Object>(token))
+			return {};
+		auto& t = std::get<Tkn_Object>(token);
+		return {t.value};
+	}
+
 }

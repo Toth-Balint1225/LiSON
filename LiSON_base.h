@@ -22,6 +22,8 @@
 #include <list>
 #include <fstream>
 #include <variant>
+#include <functional>
+#include <optional>
 
 /**
  * LiSON - LiSp Object Notation
@@ -56,6 +58,7 @@ namespace lison
 	template <class... Ts>
 	overload(Ts...) -> overload<Ts...>;
 
+	class LiSON;
 	struct Object
 	{
 		Token token;
@@ -63,6 +66,26 @@ namespace lison
 		Object(const Object& other);
 		~Object() = default;
 		std::string to_string() const;
+
+		// the factory API
+		static Object fromString(const std::string& str);
+		static Object fromLiSON(const LiSON& lison);
+
+		template <class T>
+		static Object fromObject(
+			T t,
+			std::function<Object(const T&)> f);
+
+		// injection
+		void foreachObjectData(
+			std::function<void(const Object&)> f) const;
+
+		// adding
+		void add(const Object& obj);
+
+		// maybe getting
+		std::optional<std::string> expectLiteralData() const;
+		std::optional<std::list<Object>> expectObjectData() const;
 	};
 
     /**
@@ -102,6 +125,7 @@ namespace lison
     {
     private:
         std::list<Tokenizer::SymbolObject>::iterator iter;
+        std::list<Tokenizer::SymbolObject>::iterator endIter;
 
         bool accept(Tokenizer::Symbol req);
         char character();
@@ -116,6 +140,7 @@ namespace lison
      */
     class LiSON
     {
+		friend class Object;
     protected:
         /**
          * Interface methods
