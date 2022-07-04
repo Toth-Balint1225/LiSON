@@ -21,6 +21,9 @@
 #include <sstream>
 #include <list>
 #include <fstream>
+#include <variant>
+#include <functional>
+#include <optional>
 
 /**
  * LiSON - LiSp Object Notation
@@ -30,27 +33,60 @@
  */
 namespace lison
 {
-    struct Object
-    {
-        enum Token
-        {
-            Tkn_Literal,
-            Tkn_Integer,
-            Tkn_Float,
-            Tkn_Object,
-            Tkn_Error,
-        };
-        Token token;
-        // second best thing to a union
-        std::string str;
-        int i;
-        float f;
-        std::list<Object> obj;
+	struct Tkn_Literal
+	{
+		std::string value;
+	};
 
-        Object() = default;
-        ~Object() = default;
-        std::string to_string() const;
-    };
+	struct Object;
+	struct Tkn_Object
+	{
+		std::list<Object> value;
+	};
+
+	struct Tkn_Error
+	{};
+
+	using Token = std::variant<Tkn_Literal,Tkn_Object,Tkn_Error>;
+
+	template <class... Ts>
+	struct overload : Ts...
+	{
+		using Ts::operator ()...;
+	};
+
+	template <class... Ts>
+	overload(Ts...) -> overload<Ts...>;
+
+	class LiSON;
+	struct Object
+	{
+		Token token;
+		Object(const Token& t); 
+		Object(const Object& other);
+		~Object() = default;
+		std::string to_string() const;
+
+		// the factory API
+		static Object fromString(const std::string& str);
+		static Object fromLiSON(const LiSON& lison);
+
+		template <class T>
+		static Object fromObject(
+			T t,
+			std::function<Object(const T&)> f);
+
+		// injection
+		void foreachObjectData(
+			std::function<void(const Object&)> f) const;
+
+		// adding
+		void add(const Object& obj);
+
+		// maybe getting
+		std::optional<std::string> expectLiteralData() const;
+		std::optional<std::list<Object>> expectObjectData() const;
+	};
 
     /**
      * string -> set of symbols
@@ -89,6 +125,7 @@ namespace lison
     {
     private:
         std::list<Tokenizer::SymbolObject>::iterator iter;
+        std::list<Tokenizer::SymbolObject>::iterator endIter;
 
         bool accept(Tokenizer::Symbol req);
         char character();
@@ -103,6 +140,7 @@ namespace lison
      */
     class LiSON
     {
+		friend class Object;
     protected:
         /**
          * Interface methods
