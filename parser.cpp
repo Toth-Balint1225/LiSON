@@ -77,9 +77,15 @@ namespace lison
         return o;
     }
 
+	/*
+	  Object => [LeftParen] -> [String | [Whitespace -> Object] -> [RightParen]
+	            |------------------------|
+	 */
+
     Object Parser::object()
     {
 		Object o(Token{Tkn_Object{}});
+		auto& token = std::get<Tkn_Object>(o.token);
 		// yank the whitespaces
         while (accept(Tokenizer::Sym_Whitespace));
 
@@ -100,55 +106,40 @@ namespace lison
                 Object first_obj = object();
 
 				// put them object in with a visitor
-				
-				auto firstAppender = overload
+				if (std::holds_alternative<Tkn_Error>(first_obj.token))
 				{
-					[](const Tkn_Literal& l) {},
-					[&first_obj](Tkn_Object& obj)
-					{
-						obj.value.push_back(first_obj);
-					},
-					[](const Tkn_Error& error) {}
-				};
-				std::visit(firstAppender,o.token);
-                // o.token.value.push_back(first_obj);
+					o = Object(Token{Tkn_Error{}});
+					return o;
+				}
+
+				token.value.push_back(first_obj);
+
                 // optional objects
                 bool list = true;
                 while (list)
                 {
-					// actually need a whitespace
                     if (!accept(Tokenizer::Sym_Whitespace))
                     {
-						// if end of list
                         if (accept(Tokenizer::Sym_RightParen))
-                        {
-                            list = false;
-                            break;
-                        }
+						{
+							list = false;
+							break;
+						}
                     }
                     if (accept(Tokenizer::Sym_RightParen))
                     {
                         list = false;
                         break;
                     }
-                    Object list_obj = object();
-					// errors just go to the top level
-                    // if (list_obj.token == Object::Tkn_Error)
-                    // {
-                    //     o.token = Object::Tkn_Error;
-                    //     return o;
-                    // }
-                    // o.token.value.push_back(list_obj);
-					auto listAppender = overload
+
+					if (iter == endIter)
 					{
-						[](const Tkn_Literal& l) {},
-						[&list_obj](Tkn_Object& obj)
-						{
-							obj.value.push_back(list_obj);
-						},
-						[](const Tkn_Error& error) {}
-					};
-					std::visit(listAppender,o.token);
+						o = Object(Token{Tkn_Error{}});
+						list = false;
+						break;
+					}
+                    Object list_obj = object();
+					token.value.push_back(list_obj);
                 }
             }
         }
@@ -158,24 +149,12 @@ namespace lison
         {
 			// we try with the literal
             Object tmp = literal();
-			bool finish = false;
-			auto afterLiteral = overload
+			if (!std::holds_alternative<Tkn_Error>(tmp.token))
 			{
-				[&o,&finish](const Tkn_Literal& literal)
-				{
-					o = Object(Token{literal});
-					finish = true;
-				},
-				[](const Tkn_Object& object)
-				{},
-				[&o](const Tkn_Error& err)
-				{
-					o = Object(Token{Tkn_Error{}});
-				}
-			};
-			std::visit(afterLiteral, tmp.token);
-			if (finish)
-				return o;
+				auto v = std::get<Tkn_Literal>(tmp.token);
+				o = tmp;
+			}
+			// else try with integer, float and other types
         }
 		return o;
     }
@@ -183,6 +162,7 @@ namespace lison
     Object Parser::parse(std::list<Tokenizer::SymbolObject> symbolStream)
     {
         iter = symbolStream.begin();
+		endIter = symbolStream.end();
         return object();
     }
 
