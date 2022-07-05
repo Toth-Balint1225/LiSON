@@ -22,6 +22,9 @@
 #include <sstream>
 #include <list>
 #include <fstream>
+#include <variant>
+#include <functional>
+#include <optional>
 
 /**
  * LiSON - LiSp Object Notation version 1.0
@@ -32,6 +35,19 @@
  * the LISP programming language.
  * 
  * This is the one-file version of the LiSON library.
+ *
+ * About LiSON:
+ * A LiSON object can be a string literal or a list of other objects. The list syntax is
+ * the lisp language's parenthesis with whitespaces as object delimiters, and a string
+ * is between single quotes. Inside a list, the order of contents is fix.
+ *
+ * Some example objects:
+ * () = an empty list
+ * '' = an empty string
+ * ('') = a list containing an empty string
+ * 'Hello' = a string containing the word Hello
+ * ('Hello' '' ) = a list containing a literal of Hello and an empty string
+ * ('Hello' ('World')) = a list containing the literal Hello and another list containing the literal World.
  *
  * Contents:
  * This file contains the header part and the implementation part of the LiSON library,
@@ -45,8 +61,17 @@
  *
  * To create a mapping of a class and its LiSON representation, user must implement the
  * LiSON interface for aforementioned class. The Object class has a token representing
- * its type (can be Tkn_Literal or Tkn_Object) and the data in the respective member
- * (str or obj). The LiSON interface does the conversion between Object and custom class.
+ * its type, that is a standard variant of the Tkn_Literal, Tkn_Object and Tkn_Error structures.
+ * The Object class has some functions to easily access the inside data of the Object. These
+ * are the expectLiteralData, expectObjectData and foreachObjectData. The functions starting with
+ * expect return an optional of the literal's or the object's contents and the foreach can take a
+ * function of type const Object& -> void. Adding an Object to another instance of object can be
+ * done with the add function. The Object class also provides factory methods to create itself
+ * from strings, LiSON implementations and even arbitrary objects with a conversion functon provided.
+ * Other way of accessing the inner data is the overload pattern and std::visit() functions, seen
+ * in the to_string() method. This is similar to the Rust programming language's match operator, and
+ * works with type specific lambda functions that get matched to the actual value of the std::variant.
+ * The LiSON interface does the conversion between Object and custom class.
  *
  * The serialization process can be done with the Serializer class, and its pre-implemented
  * convenience operators.
@@ -58,27 +83,39 @@
  *
  * // the include so that it actually works
  * #define LISON_IMPLEMENTATION
- * #include <LiSON.h>
- *
+ * #include <iostream>
+ * #include "LiSON.h"
+ * 
  * class MyObj : public lison::LiSON
  * {
  * private:
- *   std::string data;
+ * 	std::string data;
  * protected:
- *   virtual void interpret(const lison::Object& obj) override
- *   {
- *     if (obj.token != lison::Object::Tkn_Literal)
- *       return;
- *     data = obj.str;
- *   }
- *
- *   virtual Object revert() const override
- *   {
- *     lison::Object o_data;
- *     o_data.token = lison::Object::Tkn_Literal;
- *     o_data.str = data;
- *     return o_data;
- *   }
+ * 	virtual void interpret(const lison::Object& obj) override
+ * 	{
+ * 		data = obj.expectLiteralData().value_or("Error");
+ * 	}
+ * 
+ * 	virtual lison::Object revert() const override
+ * 	{
+ * 		lison::Object o_data = lison::Object::fromString(data);
+ * 		return o_data;
+ * 	}
+ * public:
+ * 	void print() const
+ * 	{
+ * 		std::cout << "value: " << data << std::endl;
+ * 	}
+ * };
+ * 
+ * int main()
+ * {
+ * 	MyObj myObj;
+ * 	"\'hello\'" >> myObj;
+ * 	myObj.print();
+ * 	std::string after;
+ * 	after << myObj;
+ * 	std::cout << "after: " << after << std::endl;
  * };
  *
  * 2. using the operators: the MyObj class inherits default implementations for the >> operator,
@@ -107,23 +144,61 @@ namespace lison
     /**
      * Structure to hold the actual data and token
      */
-    struct Object
-    {
-        enum Token
-        {
-            Tkn_Literal,
-            Tkn_Object,
-            Tkn_Error,
-        };
-        Token token;
-        // second best thing to a union
-        std::string str;
-        std::list<Object> obj;
 
-        Object() = default;
-        ~Object() = default;
-        std::string to_string() const;
-    };
+	struct Tkn_Literal
+	{
+		std::string value;
+	};
+
+	struct Object;
+	struct Tkn_Object
+	{
+		std::list<Object> value;
+	};
+
+	struct Tkn_Error
+	{};
+
+	using Token = std::variant<Tkn_Literal,Tkn_Object,Tkn_Error>;
+
+	template <class... Ts>
+	struct overload : Ts...
+	{
+		using Ts::operator ()...;
+	};
+
+	template <class... Ts>
+	overload(Ts...) -> overload<Ts...>;
+
+	class LiSON;
+	struct Object
+	{
+		Token token;
+		Object(const Token& t); 
+		Object(const Object& other);
+		~Object() = default;
+		std::string to_string() const;
+
+		// the factory API
+		static Object fromString(const std::string& str);
+		static Object fromLiSON(const LiSON& lison);
+
+		template <class T>
+		static Object fromObject(
+			T t,
+			std::function<Object(const T&)> f);
+
+		// injection
+		void foreachObjectData(
+			std::function<void(const Object&)> f) const;
+
+		// adding
+		void add(const Object& obj);
+
+		// maybe getting
+		std::optional<std::string> expectLiteralData() const;
+		std::optional<std::list<Object>> expectObjectData() const;
+	};
 
     /**
      * string -> set of symbols
@@ -164,6 +239,7 @@ namespace lison
     {
     private:
         std::list<Tokenizer::SymbolObject>::iterator iter;
+        std::list<Tokenizer::SymbolObject>::iterator endIter;
 
         bool accept(Tokenizer::Symbol req);
         char character();
@@ -180,6 +256,7 @@ namespace lison
      */
     class LiSON
     {
+		friend class Object;
     protected:
         /**
          * Interface methods.
@@ -236,36 +313,97 @@ namespace lison
 namespace lison
 {
     // object
+	Object::Object(const Token& t)
+		: token(t)
+	{}
+
+	Object::Object(const Object& other)
+		: token(other.token)
+	{}
+	
     std::string Object::to_string() const
-    {
-        std::stringstream ss;
-        switch (token)
-        {
-            case Object::Tkn_Literal:
-            {
+	{
+		// the new variant visitor magic
+		std::stringstream ss;
+		auto visitor = overload
+		{
+			[&ss](const Tkn_Literal& literal)
+			{
                 ss << "'";
-                ss << str;
+                ss << literal.value;
                 ss << "'";
-                break;
-            }
-            case Object::Tkn_Object:
-            {
+			},
+			[&ss](const Tkn_Object& object)
+			{
                 ss << "( ";
-                for (auto o : obj)
+                for (auto o : object.value)
                 {
                     ss << o.to_string();
                 }
                 ss << ")";
-                break;
-            }
-            default:
-            {
-                ss <<"()";
-            }
-        }
-        ss << " ";
-        return ss.str();
-    }
+			},
+			[&ss](const Tkn_Error& error)
+			{
+				ss << "ERROR";
+			}
+		};
+		std::visit(visitor, token);
+		ss << " ";
+		return ss.str();
+	}
+
+	Object Object::fromString(const std::string& str)
+	{
+		return Object(Token{Tkn_Literal{str}});
+	}
+
+	Object Object::fromLiSON(const LiSON& lison)
+	{
+		return lison.revert();
+	}
+
+	template <class T>
+	Object Object::fromObject(T t,
+							  std::function<Object(const T&)> f)
+	{
+		return f(t);
+	}
+
+	void Object::foreachObjectData(
+		std::function<void(const Object&)> f) const
+	{
+		if (!std::holds_alternative<Tkn_Object>(token))
+			return;
+		auto& t = std::get<Tkn_Object>(token);
+		for (auto it : t.value)
+		{
+			f(it);
+		}
+	}
+
+	void Object::add(const Object& obj)
+	{
+		if (!std::holds_alternative<Tkn_Object>(token))
+			return;
+		auto& t = std::get<Tkn_Object>(token);
+		t.value.push_back(obj);
+	}
+
+	std::optional<std::string> Object::expectLiteralData() const
+	{
+		if (!std::holds_alternative<Tkn_Literal>(token))
+			return {};
+		auto& t = std::get<Tkn_Literal>(token);
+		return {t.value};
+	}
+
+	std::optional<std::list<Object>> Object::expectObjectData() const
+	{
+		if (!std::holds_alternative<Tkn_Object>(token))
+			return {};
+		auto& t = std::get<Tkn_Object>(token);
+		return {t.value};
+	}
 
     // tokenizer
     std::list<Tokenizer::SymbolObject> Tokenizer::tokenize(const std::string& src)
@@ -341,39 +479,51 @@ namespace lison
             }
             if (accept(Tokenizer::Sym_Quote))
             {
-                Object o;
-                o.token = Object::Tkn_Literal;
-                o.str = ss.str();
+				Object o(Token{Tkn_Literal{ss.str()}});
                 return o;
             }
         }
-        Object o;
-        o.token = Object::Tkn_Error;
+        Object o(Token{Tkn_Error{}});
         return o;
     }
 
+	/*
+	  Object => [LeftParen] -> [String | [Whitespace -> Object] -> [RightParen]
+	            |------------------------|
+	 */
+
     Object Parser::object()
     {
-        Object o;
+		Object o(Token{Tkn_Object{}});
+		auto& token = std::get<Tkn_Object>(o.token);
+		// yank the whitespaces
         while (accept(Tokenizer::Sym_Whitespace));
+
+		// outer if: looks for left paren, that means a new Object object
         if (accept(Tokenizer::Sym_LeftParen))
         {
-            o.token = Object::Tkn_Object;
             // yank the whitespaces
             while (accept(Tokenizer::Sym_Whitespace));
+
+			// if it's an empty object, we return
             if (accept(Tokenizer::Sym_RightParen))
-            {
                 return o;
-            }
+			// the object has some contents
             else 
             {
+				// get the first object in the object
+				// at this point there must be at least one
                 Object first_obj = object();
-                if (first_obj.token == Object::Tkn_Error)
-                {
-                    o.token = Object::Tkn_Error;
-                    return o;
-                }
-                o.obj.push_back(first_obj);
+
+				// put them object in with a visitor
+				if (std::holds_alternative<Tkn_Error>(first_obj.token))
+				{
+					o = Object(Token{Tkn_Error{}});
+					return o;
+				}
+
+				token.value.push_back(first_obj);
+
                 // optional objects
                 bool list = true;
                 while (list)
@@ -381,47 +531,48 @@ namespace lison
                     if (!accept(Tokenizer::Sym_Whitespace))
                     {
                         if (accept(Tokenizer::Sym_RightParen))
-                        {
-                            list = false;
-                            break;
-                        }
-                        o.token = Object::Tkn_Error;
-                        return o;
+						{
+							list = false;
+							break;
+						}
                     }
                     if (accept(Tokenizer::Sym_RightParen))
                     {
                         list = false;
                         break;
                     }
+
+					if (iter == endIter)
+					{
+						o = Object(Token{Tkn_Error{}});
+						list = false;
+						break;
+					}
                     Object list_obj = object();
-                    if (list_obj.token == Object::Tkn_Error)
-                    {
-                        o.token = Object::Tkn_Error;
-                        return o;
-                    }
-                    o.obj.push_back(list_obj);
+					token.value.push_back(list_obj);
                 }
-                return o;
             }
         }
+		// outer else:
+		// happens if the object doesn't start with a left paren -> it's a literal (or later something else)
         else
         {
-            Object l = literal();   
-            if (l.token != Object::Tkn_Error)
-            {
-                o.token = Object::Tkn_Literal;
-                o.str = l.str;
-                return o;
-            }
-            return l;
+			// we try with the literal
+            Object tmp = literal();
+			if (!std::holds_alternative<Tkn_Error>(tmp.token))
+			{
+				auto v = std::get<Tkn_Literal>(tmp.token);
+				o = tmp;
+			}
+			// else try with integer, float and other types
         }
-        o.token = Object::Tkn_Error;
-        return o;
+		return o;
     }
 
     Object Parser::parse(std::list<Tokenizer::SymbolObject> symbolStream)
     {
         iter = symbolStream.begin();
+		endIter = symbolStream.end();
         return object();
     }
 
