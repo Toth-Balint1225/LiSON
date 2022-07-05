@@ -1,11 +1,25 @@
-# LiSON - LiSp Object Notation version 1.0
-Tóth Bálint, University of Pannonia, 2022
+# LiSON - LiSp Object Notation version 1.1
+Tóth Bálint, University of Pannonia, 2022,
 
-LiSON is a simple markup language that (at this point) can interpret single-quotet
+<toth.balint1225@gmail.com>
+
+LiSON is a simple markup language that (at this point) can interpret single-quoted
 strings and list of strings and/or other strings. This makes it kind of similar to
 the LISP programming language.
 
 LiSON.h is the one-file version of the LiSON library.
+## About LiSON:
+A LiSON object can be a string literal or a list of other objects. The list syntax is
+the lisp language's parenthesis with whitespaces as object delimiters, and a string
+is between single quotes. Inside a list, the order of contents is fix.
+
+Some example objects:
+- () = an empty list
+- '' = an empty string
+- ('') = a list containing an empty string
+- 'Hello' = a string containing the word Hello
+- ('Hello' '' ) = a list containing a literal of Hello and an empty string
+- ('Hello' ('World')) = a list containing the literal Hello and another list containing the literal World.
 
 ## Contents:
 The LiSON.h contains the header part and the implementation part of the LiSON library,
@@ -19,8 +33,17 @@ translation unit.
 
 To create a mapping of a class and its LiSON representation, user must implement the
 LiSON interface for aforementioned class. The Object class has a token representing
-its type (can be Tkn_Literal or Tkn_Object) and the data in the respective member
-(str or obj). The LiSON interface does the conversion between Object and custom class.
+its type, that is a standard variant of the Tkn_Literal, Tkn_Object and Tkn_Error structures.
+The Object class has some functions to easily access the inside data of the Object. These
+are the expectLiteralData, expectObjectData and foreachObjectData. The functions starting with
+expect return an optional of the literal's or the object's contents and the foreach can take a
+function of type const Object& -> void. Adding an Object to another instance of object can be
+done with the add function. The Object class also provides factory methods to create itself
+from strings, LiSON implementations and even arbitrary objects with a conversion functon provided.
+Other way of accessing the inner data is the overload pattern and std::visit() functions, seen
+in the to_string() method. This is similar to the Rust programming language's match operator, and
+works with type specific lambda functions that get matched to the actual value of the std::variant.
+The LiSON interface does the conversion between Object and custom class.
 
 The serialization process can be done with the Serializer class, and its pre-implemented
 convenience operators.
@@ -31,29 +54,40 @@ convenience operators.
    and an instance of MyObj
 
 ```
-// the include so that it actually works
 #define LISON_IMPLEMENTATION
-#include <LiSON.h>
+#include <iostream>
+#include "LiSON.h"
 
 class MyObj : public lison::LiSON
 {
 private:
-    std::string data;
+	std::string data;
 protected:
-    virtual void interpret(const lison::Object& obj) override
-    {
-        if (obj.token != lison::Object::Tkn_Literal)
-        return;
-        data = obj.str;
-    }
+	virtual void interpret(const lison::Object& obj) override
+	{
+		data = obj.expectLiteralData().value_or("Error");
+	}
 
-    virtual Object revert() const override
-    {
-        lison::Object o_data;
-        o_data.token = lison::Object::Tkn_Literal;
-        o_data.str = data;
-        return o_data;
-    }
+	virtual lison::Object revert() const override
+	{
+		lison::Object o_data = lison::Object::fromString(data);
+		return o_data;
+	}
+public:
+	void print() const
+	{
+		std::cout << "value: " << data << std::endl;
+	}
+};
+
+int main()
+{
+	MyObj myObj;
+	"\'hello\'" >> myObj;
+	myObj.print();
+	std::string after;
+	after << myObj;
+	std::cout << "after: " << after << std::endl;
 };
 ```
 

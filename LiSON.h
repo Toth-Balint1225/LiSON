@@ -27,7 +27,7 @@
 #include <optional>
 
 /**
- * LiSON - LiSp Object Notation version 1.0
+ * LiSON - LiSp Object Notation
  * Tóth Bálint, University of Pannonia
  *
  * LiSON is a simple markup language that (at this point) can interpret single-quotet
