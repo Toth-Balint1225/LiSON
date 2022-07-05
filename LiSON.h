@@ -36,6 +36,19 @@
  * 
  * This is the one-file version of the LiSON library.
  *
+ * About LiSON:
+ * A LiSON object can be a string literal or a list of other objects. The list syntax is
+ * the lisp language's parenthesis with whitespaces as object delimiters, and a string
+ * is between single quotes. Inside a list, the order of contents is fix.
+ *
+ * Some example objects:
+ * () = an empty list
+ * '' = an empty string
+ * ('') = a list containing an empty string
+ * 'Hello' = a string containing the word Hello
+ * ('Hello' '' ) = a list containing a literal of Hello and an empty string
+ * ('Hello' ('World')) = a list containing the literal Hello and another list containing the literal World.
+ *
  * Contents:
  * This file contains the header part and the implementation part of the LiSON library,
  * so it compiles into the main executable.
