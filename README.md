@@ -9,13 +9,17 @@ the LISP programming language.
 
 LiSON.h is the one-file version of the LiSON library.
 ## About LiSON:
-A LiSON object can be a string literal or a list of other objects. The list syntax is
+A LiSON object can be a string literal, integer literal, float literal,
+or a list of other objects. The list syntax is similar to
 the lisp language's parenthesis with whitespaces as object delimiters, and a string
-is between single quotes. Inside a list, the order of contents is fix.
+is between single quotes. An integer is a number of any length and a float requires the presense
+of the decimal point. Inside a list, the order of contents is fixed.
 
 Some example objects:
 - () = an empty list
 - '' = an empty string
+- 123 = an integer
+- 3.14 = a float
 - ('') = a list containing an empty string
 - 'Hello' = a string containing the word Hello
 - ('Hello' '' ) = a list containing a literal of Hello and an empty string
@@ -116,3 +120,9 @@ lison::Serializer serializer("myfile.lison"); // create a serializer
 serializer >> my_obj; // get the file contents and parse into the my_obj
 "other.lison" >> serializer << my_obj;  // change the file to other.lison and serialize my_obj into it
 ```
+
+## Documentation
+### Token
+### LiSON
+### Serializer
+### Obect

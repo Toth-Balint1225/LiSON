@@ -150,6 +150,16 @@ namespace lison
 		std::string value;
 	};
 
+	struct Tkn_Integer
+	{
+		long int value;
+	};
+
+	struct Tkn_Float
+	{
+		double value;
+	};
+
 	struct Object;
 	struct Tkn_Object
 	{
@@ -159,7 +169,7 @@ namespace lison
 	struct Tkn_Error
 	{};
 
-	using Token = std::variant<Tkn_Literal,Tkn_Object,Tkn_Error>;
+	using Token = std::variant<Tkn_Literal,Tkn_Integer,Tkn_Float,Tkn_Object,Tkn_Error>;
 
 	template <class... Ts>
 	struct overload : Ts...
@@ -182,6 +192,8 @@ namespace lison
 		// the factory API
 		static Object fromString(const std::string& str);
 		static Object fromLiSON(const LiSON& lison);
+		static Object fromInt(long int i);
+		static Object fromFloat(double f);
 
 		template <class T>
 		static Object fromObject(
@@ -198,6 +210,8 @@ namespace lison
 		// maybe getting
 		std::optional<std::string> expectLiteralData() const;
 		std::optional<std::list<Object>> expectObjectData() const;
+		std::optional<long int> expectIntData() const;
+		std::optional<double> expectFloatData() const;
 	};
 
     /**
@@ -217,6 +231,7 @@ namespace lison
             Sym_RightParen,
             Sym_Character,
             Sym_Whitespace,
+			Sym_Numeric,
         };
 
         struct SymbolObject
@@ -241,10 +256,13 @@ namespace lison
         std::list<Tokenizer::SymbolObject>::iterator iter;
         std::list<Tokenizer::SymbolObject>::iterator endIter;
 
-        bool accept(Tokenizer::Symbol req);
+        bool accept(Tokenizer::Symbol req, char c = 0);
+		bool expect(Tokenizer::Symbol req, char c = 0);
         char character();
         Object literal();
         Object object();
+		Object integer();
+		Object floating();
     public:
         Object parse(std::list<Tokenizer::SymbolObject> symbolStream);
     };
@@ -345,6 +363,23 @@ namespace lison
 			[&ss](const Tkn_Error& error)
 			{
 				ss << "ERROR";
+			},
+			[&ss](const Tkn_Integer& integer)
+			{
+				ss << integer.value;
+			},
+			[&ss](const Tkn_Float& floating)
+			{
+				std::stringstream innerSS;
+				innerSS << floating.value;
+				std::string tmp = innerSS.str();
+				if (std::find(tmp.begin(),
+							  tmp.end(),
+							  '.') == tmp.end())
+				{
+					innerSS << ".0";
+				}
+				ss << innerSS.str();
 			}
 		};
 		std::visit(visitor, token);
@@ -360,6 +395,16 @@ namespace lison
 	Object Object::fromLiSON(const LiSON& lison)
 	{
 		return lison.revert();
+	}
+
+	Object Object::fromInt(long int i)
+	{
+		return Object(Token{Tkn_Integer{i}});
+	}
+
+	Object Object::fromFloat(double f)
+	{
+		return Object(Token{Tkn_Float{f}});
 	}
 
 	template <class T>
@@ -405,10 +450,27 @@ namespace lison
 		return {t.value};
 	}
 
+	std::optional<long int> Object::expectIntData() const
+	{
+		if (!std::holds_alternative<Tkn_Integer>(token))
+			return {};
+		auto& t = std::get<Tkn_Integer>(token);
+		return {t.value};
+	}
+	
+	std::optional<double> Object::expectFloatData() const
+	{
+		if (!std::holds_alternative<Tkn_Float>(token))
+			return {};
+		auto& t = std::get<Tkn_Float>(token);
+		return {t.value};
+	}
+
     // tokenizer
     std::list<Tokenizer::SymbolObject> Tokenizer::tokenize(const std::string& src)
     {
         std::list<SymbolObject> symbolStream;
+		std::string numerics = "0123456789";
         for (unsigned i=0;i<src.length();i++)
         {
             char c = src[i];
@@ -423,6 +485,12 @@ namespace lison
             {
                 sym.sym = Sym_Whitespace;
             }
+			else if (std::find(numerics.begin(),numerics.end(),c)
+					 != numerics.end())
+			{
+				sym.sym = Sym_Numeric;
+				sym.character = c;
+			}
             else
             {
                 sym.sym = Sym_Character;
@@ -434,15 +502,46 @@ namespace lison
     }
 
     // parser
-    bool Parser::accept(Tokenizer::Symbol req)
+
+	// consume symbol, but don't use it
+	// can be used to check if a special symbol is present
+    bool Parser::accept(Tokenizer::Symbol req, char c)
     {
+		bool res = false;
         if (iter->sym == req)
         {
-            ++iter;
-            return true;
+			if (c == 0)
+				res = true;
+			else
+			{
+				if (iter->character == c)
+					res = true;
+				else
+					res = false;
+			}
         }
-        return false;
+		if (res)
+			++iter;
+        return res;
     }
+
+	bool Parser::expect(Tokenizer::Symbol req, char c)
+	{
+		if (iter->sym == req)
+		{
+			if (c == 0)
+				return true;
+			else
+			{
+				if (iter->character == c)
+					return true;
+				else
+					return false;
+			}
+		}
+		else
+			return false;
+	}
 
     char Parser::character()
     {
@@ -455,7 +554,20 @@ namespace lison
         else
             return 0;
     }
+	
+	char Parser::numeric()
+	{
+        if (iter->sym == Tokenizer::Sym_Numeric)
+        {
+            char c =  iter->character;
+            ++iter;
+            return c;
+        }
+        else
+            return 0;
+	}
 
+	// ^'[^']*'
     Object Parser::literal()
     {
         if (accept(Tokenizer::Sym_Quote))
@@ -479,11 +591,15 @@ namespace lison
             }
             if (accept(Tokenizer::Sym_Quote))
             {
+                // Object o;
+                // o.token = Object::Tkn_Literal;
+                // o.str = ss.str();
 				Object o(Token{Tkn_Literal{ss.str()}});
                 return o;
             }
         }
         Object o(Token{Tkn_Error{}});
+        // o.token = Object::Tkn_Error;
         return o;
     }
 
@@ -561,10 +677,30 @@ namespace lison
             Object tmp = literal();
 			if (!std::holds_alternative<Tkn_Error>(tmp.token))
 			{
-				auto v = std::get<Tkn_Literal>(tmp.token);
 				o = tmp;
+				return o;
 			}
-			// else try with integer, float and other types
+			// float
+			tmp = floating();
+			if (!std::holds_alternative<Tkn_Error>(tmp.token))
+			{
+				o = tmp;
+				return o;
+			}
+			// int
+			tmp = integer();
+			if (!std::holds_alternative<Tkn_Error>(tmp.token))
+			{
+				o = tmp;
+				return o;
+			}
+
+			// if it errors, than we propagate the error
+			if (std::holds_alternative<Tkn_Error>(tmp.token))
+			{
+				o = Object(Token{Tkn_Error{}});
+				return o;
+			}
         }
 		return o;
     }
@@ -575,6 +711,110 @@ namespace lison
 		endIter = symbolStream.end();
         return object();
     }
+
+	// ^\d*[\s$)]
+	Object Parser::integer()
+	{
+		// if it doesn't start with a number, it is not a number
+		// -> fact.
+		auto snapshot = iter;
+		if (!expect(Tokenizer::Sym_Numeric))
+			return Object(Token{Tkn_Error{}});
+		// start by yanking numbers
+		std::stringstream ss;
+		bool loop = true; 
+
+		// read in the first digit
+		char first = numeric();
+		ss << first;
+
+		// look for more digits, anything not a decimal means it is not an int
+		// the end is a whitespace (-> do not consume!)
+		while (loop)
+		{
+			if (expect(Tokenizer::Sym_Whitespace)
+				|| iter == endIter
+				|| expect(Tokenizer::Sym_RightParen))
+			{
+				// the end is here
+				loop = false;
+				return Object::fromInt(std::stoi(ss.str()));
+			}
+			else if (expect(Tokenizer::Sym_Numeric))
+			{
+				char c = numeric();
+				ss << c;
+			}
+			else
+			{
+				loop = false;
+			}
+
+		}
+		
+		iter = snapshot;
+		return Object(Token{Tkn_Error{}});
+	}
+	
+	
+	// ^\d{1,*}\.\d{1,*}[\s$)]
+	Object Parser::floating()
+	{
+		auto snapshot = iter;
+		if (!expect(Tokenizer::Sym_Numeric))
+			return Object(Token{Tkn_Error{}});
+		std::stringstream ss;
+		bool loop = true; 
+
+		// read in the first digit
+		char first = numeric();
+		ss << first;
+
+		// first part before the dot
+		while (loop)
+		{
+			if (accept(Tokenizer::Sym_Character,'.'))
+			{
+				loop = false;
+				ss << ".";
+			}
+			else if (expect(Tokenizer::Sym_Numeric))
+				ss << numeric();
+			else
+			{
+				iter = snapshot;
+				return Object(Token{Tkn_Error{}});
+			}
+		}
+		loop = true;
+
+		// same as the integer
+		while (loop)
+		{
+			if (expect(Tokenizer::Sym_Whitespace)
+				|| iter == endIter
+				|| expect(Tokenizer::Sym_RightParen))
+			{
+				// the end is here
+				loop = false;
+				double d = std::stod(ss.str());
+				return Object::fromFloat(d);
+			}
+			else if (expect(Tokenizer::Sym_Numeric))
+			{
+				char c = numeric();
+				ss << c;
+			}
+			else
+			{
+				loop = false;
+			}
+
+		}
+		
+		iter = snapshot;
+		return Object(Token{Tkn_Error{}});
+	}
 
     // lison
     void LiSON::deserialize(const std::string& src)
