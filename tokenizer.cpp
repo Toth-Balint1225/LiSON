@@ -21,6 +21,7 @@ namespace lison
     std::list<Tokenizer::SymbolObject> Tokenizer::tokenize(const std::string& src)
     {
         std::list<SymbolObject> symbolStream;
+		std::string numerics = "0123456789";
         for (unsigned i=0;i<src.length();i++)
         {
             char c = src[i];
@@ -35,6 +36,12 @@ namespace lison
             {
                 sym.sym = Sym_Whitespace;
             }
+			else if (std::find(numerics.begin(),numerics.end(),c)
+					 != numerics.end())
+			{
+				sym.sym = Sym_Numeric;
+				sym.character = c;
+			}
             else
             {
                 sym.sym = Sym_Character;
