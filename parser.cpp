@@ -20,15 +20,43 @@ namespace lison
 {
 	// consume symbol, but don't use it
 	// can be used to check if a special symbol is present
-    bool Parser::accept(Tokenizer::Symbol req)
+    bool Parser::accept(Tokenizer::Symbol req, char c)
     {
+		bool res = false;
         if (iter->sym == req)
         {
-            ++iter;
-            return true;
+			if (c == 0)
+				res = true;
+			else
+			{
+				if (iter->character == c)
+					res = true;
+				else
+					res = false;
+			}
         }
-        return false;
+		if (res)
+			++iter;
+        return res;
     }
+
+	bool Parser::expect(Tokenizer::Symbol req, char c)
+	{
+		if (iter->sym == req)
+		{
+			if (c == 0)
+				return true;
+			else
+			{
+				if (iter->character == c)
+					return true;
+				else
+					return false;
+			}
+		}
+		else
+			return false;
+	}
 
     char Parser::character()
     {
@@ -41,7 +69,20 @@ namespace lison
         else
             return 0;
     }
+	
+	char Parser::numeric()
+	{
+        if (iter->sym == Tokenizer::Sym_Numeric)
+        {
+            char c =  iter->character;
+            ++iter;
+            return c;
+        }
+        else
+            return 0;
+	}
 
+	// ^'[^']*'
     Object Parser::literal()
     {
         if (accept(Tokenizer::Sym_Quote))
@@ -151,10 +192,30 @@ namespace lison
             Object tmp = literal();
 			if (!std::holds_alternative<Tkn_Error>(tmp.token))
 			{
-				auto v = std::get<Tkn_Literal>(tmp.token);
 				o = tmp;
+				return o;
 			}
-			// else try with integer, float and other types
+			// float
+			tmp = floating();
+			if (!std::holds_alternative<Tkn_Error>(tmp.token))
+			{
+				o = tmp;
+				return o;
+			}
+			// int
+			tmp = integer();
+			if (!std::holds_alternative<Tkn_Error>(tmp.token))
+			{
+				o = tmp;
+				return o;
+			}
+
+			// if it errors, than we propagate the error
+			if (std::holds_alternative<Tkn_Error>(tmp.token))
+			{
+				o = Object(Token{Tkn_Error{}});
+				return o;
+			}
         }
 		return o;
     }
@@ -165,5 +226,109 @@ namespace lison
 		endIter = symbolStream.end();
         return object();
     }
+
+	// ^\d*[\s$)]
+	Object Parser::integer()
+	{
+		// if it doesn't start with a number, it is not a number
+		// -> fact.
+		auto snapshot = iter;
+		if (!expect(Tokenizer::Sym_Numeric))
+			return Object(Token{Tkn_Error{}});
+		// start by yanking numbers
+		std::stringstream ss;
+		bool loop = true; 
+
+		// read in the first digit
+		char first = numeric();
+		ss << first;
+
+		// look for more digits, anything not a decimal means it is not an int
+		// the end is a whitespace (-> do not consume!)
+		while (loop)
+		{
+			if (expect(Tokenizer::Sym_Whitespace)
+				|| iter == endIter
+				|| expect(Tokenizer::Sym_RightParen))
+			{
+				// the end is here
+				loop = false;
+				return Object::fromInt(std::stoi(ss.str()));
+			}
+			else if (expect(Tokenizer::Sym_Numeric))
+			{
+				char c = numeric();
+				ss << c;
+			}
+			else
+			{
+				loop = false;
+			}
+
+		}
+		
+		iter = snapshot;
+		return Object(Token{Tkn_Error{}});
+	}
+	
+	
+	// ^\d{1,*}\.\d{1,*}[\s$)]
+	Object Parser::floating()
+	{
+		auto snapshot = iter;
+		if (!expect(Tokenizer::Sym_Numeric))
+			return Object(Token{Tkn_Error{}});
+		std::stringstream ss;
+		bool loop = true; 
+
+		// read in the first digit
+		char first = numeric();
+		ss << first;
+
+		// first part before the dot
+		while (loop)
+		{
+			if (accept(Tokenizer::Sym_Character,'.'))
+			{
+				loop = false;
+				ss << ".";
+			}
+			else if (expect(Tokenizer::Sym_Numeric))
+				ss << numeric();
+			else
+			{
+				iter = snapshot;
+				return Object(Token{Tkn_Error{}});
+			}
+		}
+		loop = true;
+
+		// same as the integer
+		while (loop)
+		{
+			if (expect(Tokenizer::Sym_Whitespace)
+				|| iter == endIter
+				|| expect(Tokenizer::Sym_RightParen))
+			{
+				// the end is here
+				loop = false;
+				double d = std::stod(ss.str());
+				return Object::fromFloat(d);
+			}
+			else if (expect(Tokenizer::Sym_Numeric))
+			{
+				char c = numeric();
+				ss << c;
+			}
+			else
+			{
+				loop = false;
+			}
+
+		}
+		
+		iter = snapshot;
+		return Object(Token{Tkn_Error{}});
+	}
 
 }

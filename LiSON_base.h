@@ -17,6 +17,7 @@
 #ifndef LISON_BASE_H
 #define LISON_BASE_H
 
+#include <cstdlib>
 #include <string>
 #include <sstream>
 #include <list>
@@ -38,6 +39,16 @@ namespace lison
 		std::string value;
 	};
 
+	struct Tkn_Integer
+	{
+		long int value;
+	};
+
+	struct Tkn_Float
+	{
+		double value;
+	};
+
 	struct Object;
 	struct Tkn_Object
 	{
@@ -47,7 +58,7 @@ namespace lison
 	struct Tkn_Error
 	{};
 
-	using Token = std::variant<Tkn_Literal,Tkn_Object,Tkn_Error>;
+	using Token = std::variant<Tkn_Literal,Tkn_Integer,Tkn_Float,Tkn_Object,Tkn_Error>;
 
 	template <class... Ts>
 	struct overload : Ts...
@@ -70,22 +81,26 @@ namespace lison
 		// the factory API
 		static Object fromString(const std::string& str);
 		static Object fromLiSON(const LiSON& lison);
+		static Object fromInt(long int i);
+		static Object fromFloat(double f);
 
 		template <class T>
 		static Object fromObject(
 			T t,
 			std::function<Object(const T&)> f);
 
-		// injection
+		// injection in lists
 		void foreachObjectData(
 			std::function<void(const Object&)> f) const;
 
-		// adding
+		// adding for lists 
 		void add(const Object& obj);
 
 		// maybe getting
 		std::optional<std::string> expectLiteralData() const;
 		std::optional<std::list<Object>> expectObjectData() const;
+		std::optional<long int> expectIntData() const;
+		std::optional<double> expectFloatData() const;
 	};
 
     /**
@@ -104,6 +119,7 @@ namespace lison
             Sym_RightParen,
             Sym_Character,
             Sym_Whitespace,
+			Sym_Numeric,
         };
 
         struct SymbolObject
@@ -127,10 +143,14 @@ namespace lison
         std::list<Tokenizer::SymbolObject>::iterator iter;
         std::list<Tokenizer::SymbolObject>::iterator endIter;
 
-        bool accept(Tokenizer::Symbol req);
+        bool accept(Tokenizer::Symbol req, char c = 0);
+		bool expect(Tokenizer::Symbol req, char c = 0);
         char character();
+		char numeric();
         Object literal();
         Object object();
+		Object integer();
+		Object floating();
     public:
         Object parse(std::list<Tokenizer::SymbolObject> symbolStream);
     };

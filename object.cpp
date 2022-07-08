@@ -18,36 +18,6 @@
 
 namespace lison
 {
-//     std::string Object::to_string() const
-//     {
-//         std::stringstream ss;
-//         switch (token)
-//         {
-//             case Object::Tkn_Literal:
-//             {
-//                 ss << "'";
-//                 ss << str;
-//                 ss << "'";
-//                 break;
-//             }
-//             case Object::Tkn_Object:
-//             {
-//                 ss << "( ";
-//                 for (auto o : obj)
-//                 {
-//                     ss << o.to_string();
-//                 }
-//                 ss << ")";
-//                 break;
-//             }
-//             default:
-//             {
-//                 ss <<"()";
-//             }
-//         }
-//         ss << " ";
-//         return ss.str();
-//     }
 
 	Object::Object(const Token& t)
 		: token(t)
@@ -81,6 +51,23 @@ namespace lison
 			[&ss](const Tkn_Error& error)
 			{
 				ss << "ERROR";
+			},
+			[&ss](const Tkn_Integer& integer)
+			{
+				ss << integer.value;
+			},
+			[&ss](const Tkn_Float& floating)
+			{
+				std::stringstream innerSS;
+				innerSS << floating.value;
+				std::string tmp = innerSS.str();
+				if (std::find(tmp.begin(),
+							  tmp.end(),
+							  '.') == tmp.end())
+				{
+					innerSS << ".0";
+				}
+				ss << innerSS.str();
 			}
 		};
 		std::visit(visitor, token);
@@ -96,6 +83,16 @@ namespace lison
 	Object Object::fromLiSON(const LiSON& lison)
 	{
 		return lison.revert();
+	}
+
+	Object Object::fromInt(long int i)
+	{
+		return Object(Token{Tkn_Integer{i}});
+	}
+
+	Object Object::fromFloat(double f)
+	{
+		return Object(Token{Tkn_Float{f}});
 	}
 
 	template <class T>
@@ -138,6 +135,22 @@ namespace lison
 		if (!std::holds_alternative<Tkn_Object>(token))
 			return {};
 		auto& t = std::get<Tkn_Object>(token);
+		return {t.value};
+	}
+
+	std::optional<long int> Object::expectIntData() const
+	{
+		if (!std::holds_alternative<Tkn_Integer>(token))
+			return {};
+		auto& t = std::get<Tkn_Integer>(token);
+		return {t.value};
+	}
+	
+	std::optional<double> Object::expectFloatData() const
+	{
+		if (!std::holds_alternative<Tkn_Float>(token))
+			return {};
+		auto& t = std::get<Tkn_Float>(token);
 		return {t.value};
 	}
 
