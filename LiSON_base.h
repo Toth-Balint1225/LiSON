@@ -17,6 +17,7 @@
 #ifndef LISON_BASE_H
 #define LISON_BASE_H
 
+#include <cstdlib>
 #include <string>
 #include <sstream>
 #include <list>
@@ -38,6 +39,16 @@ namespace lison
 		std::string value;
 	};
 
+	struct Tkn_Integer
+	{
+		long int value;
+	};
+
+	struct Tkn_Float
+	{
+		double value;
+	};
+
 	struct Object;
 	struct Tkn_Object
 	{
@@ -47,7 +58,7 @@ namespace lison
 	struct Tkn_Error
 	{};
 
-	using Token = std::variant<Tkn_Literal,Tkn_Object,Tkn_Error>;
+	using Token = std::variant<Tkn_Literal,Tkn_Integer,Tkn_Float,Tkn_Object,Tkn_Error>;
 
 	template <class... Ts>
 	struct overload : Ts...
@@ -104,6 +115,7 @@ namespace lison
             Sym_RightParen,
             Sym_Character,
             Sym_Whitespace,
+			Sym_Numeric,
         };
 
         struct SymbolObject
