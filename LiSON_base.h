@@ -81,22 +81,26 @@ namespace lison
 		// the factory API
 		static Object fromString(const std::string& str);
 		static Object fromLiSON(const LiSON& lison);
+		static Object fromInt(long int i);
+		static Object fromFloat(double f);
 
 		template <class T>
 		static Object fromObject(
 			T t,
 			std::function<Object(const T&)> f);
 
-		// injection
+		// injection in lists
 		void foreachObjectData(
 			std::function<void(const Object&)> f) const;
 
-		// adding
+		// adding for lists 
 		void add(const Object& obj);
 
 		// maybe getting
 		std::optional<std::string> expectLiteralData() const;
 		std::optional<std::list<Object>> expectObjectData() const;
+		std::optional<long int> expectIntData() const;
+		std::optional<double> expectFloatData() const;
 	};
 
     /**
