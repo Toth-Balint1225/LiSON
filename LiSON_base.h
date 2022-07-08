@@ -143,10 +143,14 @@ namespace lison
         std::list<Tokenizer::SymbolObject>::iterator iter;
         std::list<Tokenizer::SymbolObject>::iterator endIter;
 
-        bool accept(Tokenizer::Symbol req);
+        bool accept(Tokenizer::Symbol req, char c = 0);
+		bool expect(Tokenizer::Symbol req, char c = 0);
         char character();
+		char numeric();
         Object literal();
         Object object();
+		Object integer();
+		Object floating();
     public:
         Object parse(std::list<Tokenizer::SymbolObject> symbolStream);
     };
