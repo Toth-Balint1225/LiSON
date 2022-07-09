@@ -30,7 +30,6 @@
  * LiSON - LiSp Object Notation
  * Tóth Bálint, University of Pannonia
  * TODO: Exception on parsing error
- * TODO: change all std::string to std::wstring and char to wchar_t
  */
 namespace lison
 {
@@ -49,6 +48,11 @@ namespace lison
 		double value;
 	};
 
+	struct Tkn_Keyword
+	{
+		std::string value;
+	};
+
 	struct Object;
 	struct Tkn_Object
 	{
@@ -58,7 +62,7 @@ namespace lison
 	struct Tkn_Error
 	{};
 
-	using Token = std::variant<Tkn_Literal,Tkn_Integer,Tkn_Float,Tkn_Object,Tkn_Error>;
+	using Token = std::variant<Tkn_Literal,Tkn_Integer,Tkn_Float,Tkn_Keyword,Tkn_Object,Tkn_Error>;
 
 	template <class... Ts>
 	struct overload : Ts...
