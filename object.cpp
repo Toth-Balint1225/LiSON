@@ -68,6 +68,10 @@ namespace lison
 					innerSS << ".0";
 				}
 				ss << innerSS.str();
+			},
+			[&ss](const Tkn_Keyword& keyword)
+			{
+				ss << ":" << keyword.value;
 			}
 		};
 		std::visit(visitor, token);
@@ -93,6 +97,21 @@ namespace lison
 	Object Object::fromFloat(double f)
 	{
 		return Object(Token{Tkn_Float{f}});
+	}
+
+	Object Object::fromKeyword(const std::string& str)
+	{
+		return Object(Token{Tkn_Keyword{str}});
+	}
+
+	Object Object::error()
+	{
+		return Object(Token{Tkn_Error{}});
+	}
+
+	Object Object::empty()
+	{
+		return Object(Token{Tkn_Object{}});
 	}
 
 	template <class T>
@@ -154,4 +173,12 @@ namespace lison
 		return {t.value};
 	}
 
+	std::optional<std::string> Object::expectKeywordData() const
+	{
+		if (!std::holds_alternative<Tkn_Keyword>(token))
+			return {};
+		auto& t = std::get<Tkn_Keyword>(token);
+		return {t.value};
+	}
+	
 }

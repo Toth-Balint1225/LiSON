@@ -108,6 +108,7 @@ namespace lison
 		std::optional<std::list<Object>> expectObjectData() const;
 		std::optional<long int> expectIntData() const;
 		std::optional<double> expectFloatData() const;
+		std::optional<std::string> expectKeywordData() const;
 	};
 
     /**
@@ -158,6 +159,7 @@ namespace lison
         Object object();
 		Object integer();
 		Object floating();
+		Object keyword();
     public:
         Object parse(std::list<Tokenizer::SymbolObject> symbolStream);
     };
