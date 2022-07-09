@@ -60,7 +60,7 @@ namespace lison
 
     char Parser::character()
     {
-        if (iter->sym == Tokenizer::Sym_Character)
+        if (iter->sym == Tokenizer::Sym_Character || iter->sym == Tokenizer::Sym_Numeric)
         {
             char c =  iter->character;
             ++iter;
@@ -210,6 +210,14 @@ namespace lison
 				return o;
 			}
 
+			// :keyword
+			tmp = keyword();
+			if (!std::holds_alternative<Tkn_Error>(tmp.token))
+			{
+				o = tmp;
+				return o;
+			}
+
 			// if it errors, than we propagate the error
 			if (std::holds_alternative<Tkn_Error>(tmp.token))
 			{
@@ -329,6 +337,34 @@ namespace lison
 		
 		iter = snapshot;
 		return Object(Token{Tkn_Error{}});
+	}
+
+	// ^:\p{1,*}[\w)$]
+	Object Parser::keyword()
+	{
+		if (!accept(Tokenizer::Sym_Character,':'))
+			return Object::error();
+
+		std::stringstream ss;
+
+		bool loop = true;
+
+		while (loop)
+		{
+			if (expect(Tokenizer::Sym_Character,')')
+				|| expect(Tokenizer::Sym_RightParen)
+				|| expect(Tokenizer::Sym_Whitespace)
+				|| iter == endIter)
+			{
+				loop = false;
+			}
+			else if (expect(Tokenizer::Sym_Character))
+			{
+				ss << character();
+			}
+		}
+
+		return Object::fromKeyword(ss.str());
 	}
 
 }

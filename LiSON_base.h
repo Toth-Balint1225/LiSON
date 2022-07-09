@@ -87,6 +87,9 @@ namespace lison
 		static Object fromLiSON(const LiSON& lison);
 		static Object fromInt(long int i);
 		static Object fromFloat(double f);
+		static Object fromKeyword(const std::string& str);
+		static Object error();
+		static Object empty();
 
 		template <class T>
 		static Object fromObject(
