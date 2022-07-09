@@ -11,11 +11,46 @@ using namespace lison;
  * Implementation of the LiSON interface
  */
 
+class MyObj;
+class KeyValuePair : public LiSON
+{
+	friend class MyObj;
+public:
+	std::string key;
+	std::string data;
+
+	KeyValuePair()
+		: key("default")
+		, data("default")
+	{}
+
+	void debug_print()
+	{
+		std::cout << key << " -> " << data << std::endl;
+	}
+
+protected:
+    virtual void interpret(const Object& obj) override
+	{
+		auto list = obj.expectObjectData().value_or(std::list<Object>());
+		key = list.front().expectKeywordData().value_or("error");
+		data = list.back().expectLiteralData().value_or("error");
+	}
+
+    virtual Object revert() const
+	{
+		Object o_root = Object::empty();
+		o_root.add(Object::fromKeyword(key));
+		o_root.add(Object::fromString(data));
+		return o_root;
+	}
+	
+};
 
 class MyObj : public LiSON
 {
 public:
-	std::list<double> data;
+	std::list<KeyValuePair> data;
 protected:
     /**
      * Implementation of the interpret function.
@@ -24,10 +59,13 @@ protected:
      */
     virtual void interpret(const Object& obj) override
     {
+		std::cout << "Interpretation happens" << std::endl;
 		// the shiny new api
 		obj.foreachObjectData([this](const Object& o)
 		{
-			data.push_back(o.expectFloatData().value_or(0.0));
+			KeyValuePair pair;
+			pair.interpret(o);
+			data.push_back(pair);
 		});
     }
 
@@ -37,10 +75,9 @@ protected:
      */
     virtual Object revert() const 
     {
-		Object o_root(Token{Tkn_Object{}});
-
+		Object o_root = Object::empty();
 		for (auto it : data)
-			o_root.add(Object::fromFloat(it));
+			o_root.add(Object::fromLiSON(it));
 
 		return o_root;
     }
@@ -53,7 +90,8 @@ public:
     void debug_print()
     {
 		for (auto it : data)
-			std::cout << "data: " << it << std::endl;
+			it.debug_print();
+		// std::cout << "data: " << data << std::endl;
     }
 };
 
